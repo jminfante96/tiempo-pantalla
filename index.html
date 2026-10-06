@@ -231,9 +231,10 @@ td:first-child { white-space: nowrap; }
     if (typeof s === "number") return s;
     if (!s || typeof s !== "string") return null;
     var t = s.toLowerCase().replace(/,/g, " ");
-    var h = t.match(/(\d+(?:[.,]\d+)?)\s*(?:h|hr|hrs|hora|horas)\b/);
-    var m = t.match(/(\d+)\s*(?:min|mins|minutos?|m)\b/);
-    var sec = t.match(/(\d+)\s*(?:s|seg|segundos?)\b/);
+    // Tolerante a errores de lectura de la captura (ej. "55ml" en vez de "55m")
+    var h = t.match(/(\d+(?:[.,]\d+)?)\s*h/);
+    var m = t.match(/(\d+)\s*m/);
+    var sec = t.match(/(\d+)\s*s/);
     if (!h && !m && !sec) return null;
     return (h ? parseFloat(h[1].replace(",", ".")) * 60 : 0) + (m ? +m[1] : 0) + (sec ? +sec[1] / 60 : 0);
   }
