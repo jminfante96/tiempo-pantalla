@@ -1,0 +1,619 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Tiempo">
+<meta name="robots" content="noindex">
+<title>Mi tiempo en pantalla</title>
+<style>
+:root {
+  color-scheme: light;
+  --bg: #f4f3f0;
+  --surface-1: #fcfcfb;
+  --border: #e4e2dd;
+  --grid: #ebe9e4;
+  --text-primary: #0b0b0b;
+  --text-secondary: #52514e;
+  --text-muted: #7a7974;
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
+  --good: #1f7a3a;
+  --bad: #b8322f;
+  --chip-bg: #efeee9;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #121211;
+    --surface-1: #1a1a19;
+    --border: #2c2c2a;
+    --grid: #2a2a28;
+    --text-primary: #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted: #8f8e86;
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --series-4: #c98500;
+    --good: #5cc27a;
+    --bad: #ee7a77;
+    --chip-bg: #262624;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #121211;
+  --surface-1: #1a1a19;
+  --border: #2c2c2a;
+  --grid: #2a2a28;
+  --text-primary: #ffffff;
+  --text-secondary: #c3c2b7;
+  --text-muted: #8f8e86;
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --series-4: #c98500;
+  --good: #5cc27a;
+  --bad: #ee7a77;
+  --chip-bg: #262624;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bg);
+  color: var(--text-primary);
+  font: 16px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  -webkit-text-size-adjust: 100%;
+  padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+}
+main { max-width: 720px; margin: 0 auto; padding: 20px 16px 48px; }
+h1 { font-size: 15px; font-weight: 600; color: var(--text-secondary); margin: 0 0 4px; letter-spacing: .01em; }
+h2 { font-size: 17px; font-weight: 600; margin: 0 0 2px; }
+.sub { color: var(--text-muted); font-size: 13px; margin: 0 0 14px; }
+.card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 16px; padding: 16px; margin-top: 14px; }
+.hero-num { font-size: 44px; font-weight: 700; letter-spacing: -.02em; line-height: 1.05; font-variant-numeric: tabular-nums; }
+.hero-num small { font-size: 18px; font-weight: 500; color: var(--text-secondary); letter-spacing: 0; }
+.hero-meta { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 8px; font-size: 14px; color: var(--text-secondary); }
+.delta.good { color: var(--good); }
+.delta.bad { color: var(--bad); }
+.chart { position: relative; width: 100%; touch-action: pan-y; }
+.chart svg { display: block; width: 100%; overflow: visible; }
+.chart text { font-size: 11px; fill: var(--text-muted); font-variant-numeric: tabular-nums; }
+.tip {
+  position: absolute; pointer-events: none; background: var(--surface-1); border: 1px solid var(--border);
+  border-radius: 10px; padding: 8px 10px; font-size: 13px; box-shadow: 0 4px 16px rgba(0,0,0,.12);
+  white-space: nowrap; opacity: 0; transition: opacity .1s; z-index: 2;
+}
+.tip.on { opacity: 1; }
+.tip b { display: block; font-size: 12px; color: var(--text-muted); font-weight: 500; margin-bottom: 2px; }
+.tip .row { display: flex; align-items: center; gap: 6px; }
+.sw { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+.row-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+select {
+  font: inherit; font-size: 14px; color: var(--text-primary); background: var(--chip-bg);
+  border: 1px solid var(--border); border-radius: 10px; padding: 6px 10px; max-width: 100%;
+}
+.bars { list-style: none; margin: 4px 0 0; padding: 0; }
+.bars li { padding: 7px 0; }
+.bars .lbl { display: flex; justify-content: space-between; gap: 10px; font-size: 14px; }
+.bars .lbl span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bars .val { font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--text-secondary); }
+.bars .val i { font-style: normal; font-size: 12px; margin-left: 6px; }
+.track { height: 8px; margin-top: 5px; border-radius: 4px; background: var(--grid); overflow: hidden; }
+.fill { height: 100%; border-radius: 4px; background: var(--series-1); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
+.chip {
+  font: inherit; font-size: 13px; border: 1px solid var(--border); background: transparent; color: var(--text-secondary);
+  border-radius: 999px; padding: 5px 11px; display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+}
+.chip[aria-pressed="true"] { background: var(--chip-bg); color: var(--text-primary); border-color: transparent; }
+.chip .sw { border-radius: 50%; }
+.chip[aria-pressed="false"] .sw { background: transparent !important; border: 1.5px solid var(--text-muted); }
+table { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 8px 4px; border-bottom: 1px solid var(--grid); }
+th { font-size: 12px; font-weight: 500; color: var(--text-muted); }
+td.n, th.n { text-align: right; white-space: nowrap; }
+td:first-child { white-space: nowrap; }
+.tools { display: flex; flex-wrap: wrap; gap: 8px; }
+.btn {
+  font: inherit; font-size: 14px; border: 1px solid var(--border); background: var(--chip-bg); color: var(--text-primary);
+  border-radius: 10px; padding: 8px 12px; cursor: pointer;
+}
+.btn.danger { color: var(--bad); }
+.empty p { color: var(--text-secondary); margin: 6px 0; }
+.empty ol { color: var(--text-secondary); padding-left: 20px; }
+.note { font-size: 12px; color: var(--text-muted); margin-top: 10px; }
+.banner { font-size: 13px; color: var(--text-secondary); background: var(--chip-bg); border-radius: 10px; padding: 8px 12px; margin-top: 10px; }
+.hidden { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Mi tiempo en pantalla</h1>
+  <div id="banner" class="banner hidden"></div>
+
+  <section id="empty" class="card empty hidden">
+    <h2>Todavía no hay datos</h2>
+    <p>Esta página muestra lo que registra el Atajo de tu iPhone.</p>
+    <ol>
+      <li>Toma una captura de la vista semanal de Tiempo en pantalla.</li>
+      <li>Ejecuta el Atajo <b>Registrar tiempo en pantalla</b>.</li>
+      <li>Al terminar, el Atajo abre esta página con tu historial.</li>
+    </ol>
+    <p>Si ya tienes un respaldo, impórtalo abajo.</p>
+  </section>
+
+  <div id="content" class="hidden">
+    <section class="card" id="hero"></section>
+
+    <section class="card">
+      <h2>Promedio diario por semana</h2>
+      <p class="sub">Toca el gráfico para ver cada semana</p>
+      <div class="chart" id="chartTotal"></div>
+    </section>
+
+    <section class="card">
+      <div class="row-head">
+        <h2>Apps más usadas</h2>
+        <select id="weekSel" aria-label="Semana"></select>
+      </div>
+      <p class="sub">Promedio diario de la semana y cambio vs. la anterior</p>
+      <ul class="bars" id="bars"></ul>
+    </section>
+
+    <section class="card">
+      <h2>Evolución por app</h2>
+      <p class="sub">Promedio diario, elige hasta 4 apps</p>
+      <div class="chips" id="chips"></div>
+      <div class="chart" id="chartApps"></div>
+    </section>
+
+    <section class="card">
+      <h2>Historial</h2>
+      <table>
+        <thead><tr><th>Semana del</th><th class="n">Prom. diario</th><th>App principal</th></tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </section>
+  </div>
+
+  <section class="card">
+    <h2>Datos</h2>
+    <p class="sub" id="dataInfo">Tus datos viven en tu iCloud (tiempo-pantalla.txt). Esta página no los envía a ningún servidor.</p>
+    <div class="tools">
+      <label class="btn">Importar respaldo<input type="file" id="fileIn" accept=".txt,.json,.jsonl,text/plain,application/json" hidden></label>
+      <button class="btn" id="exportBtn">Descargar copia</button>
+      <button class="btn danger" id="clearBtn">Olvidar en este navegador</button>
+    </div>
+  </section>
+</main>
+
+<script>
+(function () {
+  "use strict";
+  var KEY = "tp-datos-v1";
+  var MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+  var SERIES = ["--series-1", "--series-2", "--series-3", "--series-4"];
+  var MAX_APPS = 4;
+
+  // ---------- Lectura de datos ----------
+
+  // Extrae objetos JSON de primer nivel de un texto, aunque vengan en varias
+  // líneas o pegados entre sí (así no depende de cómo Atajos serialice).
+  function parseObjects(text) {
+    var out = [], depth = 0, start = -1, inStr = false, esc = false;
+    for (var i = 0; i < text.length; i++) {
+      var c = text[i];
+      if (inStr) {
+        if (esc) esc = false;
+        else if (c === "\\") esc = true;
+        else if (c === '"') inStr = false;
+        continue;
+      }
+      if (c === '"') inStr = true;
+      else if (c === "{") { if (depth === 0) start = i; depth++; }
+      else if (c === "}" && depth > 0) {
+        depth--;
+        if (depth === 0) {
+          try { out.push(JSON.parse(text.slice(start, i + 1))); } catch (e) { /* línea dañada: se ignora */ }
+        }
+      }
+    }
+    return out;
+  }
+
+  // "3 h 12 min", "45 min", "2h 5m", "1 h" → minutos
+  function parseDur(s) {
+    if (typeof s === "number") return s;
+    if (!s || typeof s !== "string") return null;
+    var t = s.toLowerCase().replace(/,/g, " ");
+    var h = t.match(/(\d+(?:[.,]\d+)?)\s*(?:h|hr|hrs|hora|horas)\b/);
+    var m = t.match(/(\d+)\s*(?:min|mins|minutos?|m)\b/);
+    var sec = t.match(/(\d+)\s*(?:s|seg|segundos?)\b/);
+    if (!h && !m && !sec) return null;
+    return (h ? parseFloat(h[1].replace(",", ".")) * 60 : 0) + (m ? +m[1] : 0) + (sec ? +sec[1] / 60 : 0);
+  }
+
+  function mondayOf(d) {
+    var x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    var dow = (x.getDay() + 6) % 7; // lunes = 0
+    x.setDate(x.getDate() - dow);
+    return x;
+  }
+
+  function isoDay(d) {
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  }
+
+  function datosDe(r) {
+    var d = r.datos;
+    if (typeof d === "string") { var o = parseObjects(d); d = o[0]; }
+    return d && typeof d === "object" ? d : null;
+  }
+
+  function buildWeeks(raw) {
+    var byWeek = {};
+    parseObjects(raw).forEach(function (r) {
+      var d = datosDe(r);
+      var cap = new Date(r.capturado);
+      if (!d || isNaN(cap)) return;
+      var pasada = String(r.semana || "pasada").toLowerCase().indexOf("actual") === -1;
+      var ref = new Date(cap);
+      if (pasada) ref.setDate(ref.getDate() - 7);
+      var mon = mondayOf(ref);
+      // Semana completa = 7 días; semana en curso = días transcurridos hasta la captura
+      var dias = pasada ? 7 : ((cap.getDay() + 6) % 7) + 1;
+      var prom = parseDur(d.promedio_diario);
+      var total = parseDur(d.total);
+      if (prom == null && total != null) prom = total / dias;
+      if (prom == null) return;
+      var apps = (Array.isArray(d.apps) ? d.apps : []).map(function (a) {
+        var min = parseDur(a && a.tiempo);
+        var nombre = a && typeof a.nombre === "string" ? a.nombre.trim() : "";
+        return nombre && min != null ? { nombre: nombre, diario: min / dias } : null;
+      }).filter(Boolean);
+      var key = isoDay(mon);
+      var prev = byWeek[key];
+      if (!prev || prev.capturado <= cap) {
+        byWeek[key] = { key: key, lunes: mon, dias: dias, prom: prom, apps: apps, rango: d.rango || "", capturado: cap };
+      }
+    });
+    return Object.keys(byWeek).sort().map(function (k) { return byWeek[k]; });
+  }
+
+  function decodeB64(s) {
+    s = s.replace(/\s/g, "").replace(/-/g, "+").replace(/_/g, "/");
+    while (s.length % 4) s += "=";
+    var bin = atob(s), bytes = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new TextDecoder("utf-8").decode(bytes);
+  }
+
+  function store(raw) { try { localStorage.setItem(KEY, raw); } catch (e) {} }
+  function load() { try { return localStorage.getItem(KEY) || ""; } catch (e) { return ""; } }
+  function forget() { try { localStorage.removeItem(KEY); } catch (e) {} }
+
+  // ---------- Formato ----------
+
+  function fmt(min) {
+    if (min == null || isNaN(min)) return "–";
+    var m = Math.round(min);
+    var h = Math.floor(m / 60), r = m % 60;
+    if (!h) return r + " min";
+    return r ? h + " h " + r + " min" : h + " h";
+  }
+  function fmtShort(min) {
+    var m = Math.round(min), h = Math.floor(m / 60), r = m % 60;
+    return h ? h + "h" + (r ? String(r).padStart(2, "0") : "") : r + "m";
+  }
+  function dayLabel(d) { return d.getDate() + " " + MESES[d.getMonth()]; }
+  function weekLabel(w) {
+    var end = new Date(w.lunes); end.setDate(end.getDate() + 6);
+    return dayLabel(w.lunes) + " al " + dayLabel(end);
+  }
+  function deltaText(cur, prev, unit) {
+    if (prev == null) return "";
+    var d = Math.round(cur - prev);
+    if (d === 0) return '<span class="delta">Igual que la semana anterior</span>';
+    var cls = d < 0 ? "good" : "bad";
+    var word = d < 0 ? "menos" : "más";
+    return '<span class="delta ' + cls + '">' + (d < 0 ? "↓ " : "↑ ") + fmt(Math.abs(d)) + " " + word + (unit || " que la semana anterior") + "</span>";
+  }
+  function css(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+
+  // ---------- Gráfico de líneas (SVG) ----------
+
+  // Escala en pasos "redondos" (15 min, 30 min, 1 h…) con a lo más 5 divisiones
+  function niceScale(v) {
+    var steps = [15, 30, 60, 90, 120, 180, 240];
+    for (var i = 0; i < steps.length; i++) {
+      if (v / steps[i] <= 5) return { step: steps[i], max: Math.ceil(v / steps[i]) * steps[i] };
+    }
+    return { step: 240, max: Math.ceil(v / 240) * 240 };
+  }
+
+  function lineChart(el, labels, series) {
+    el.innerHTML = "";
+    var W = Math.max(el.clientWidth, 280), H = 210;
+    var pad = { l: 40, r: series.length > 1 ? 70 : 14, t: 12, b: 26 };
+    var iw = W - pad.l - pad.r, ih = H - pad.t - pad.b;
+    var all = [];
+    series.forEach(function (s) { s.values.forEach(function (v) { if (v != null) all.push(v); }); });
+    var scale = niceScale(Math.max.apply(null, all.concat([1]))), max = scale.max;
+    var n = labels.length;
+    var x = function (i) { return pad.l + (n === 1 ? iw / 2 : (i * iw) / (n - 1)); };
+    var y = function (v) { return pad.t + ih - (v / max) * ih; };
+    var NS = "http://www.w3.org/2000/svg";
+    var svg = document.createElementNS(NS, "svg");
+    svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+    svg.setAttribute("height", H);
+    svg.setAttribute("role", "img");
+    function add(tag, attrs, parent) {
+      var e = document.createElementNS(NS, tag);
+      for (var k in attrs) e.setAttribute(k, attrs[k]);
+      (parent || svg).appendChild(e);
+      return e;
+    }
+    // Rejilla y eje Y (en horas)
+    for (var v = 0; v <= max; v += scale.step) {
+      var yy = y(v);
+      add("line", { x1: pad.l, x2: pad.l + iw, y1: yy, y2: yy, stroke: css("--grid"), "stroke-width": 1 });
+      var tx = add("text", { x: pad.l - 8, y: yy + 4, "text-anchor": "end" });
+      tx.textContent = fmtShort(v);
+    }
+    // Eje X: etiquetas espaciadas para que no choquen
+    var every = Math.max(1, Math.ceil(n / Math.floor(iw / 56)));
+    labels.forEach(function (lb, i) {
+      if (i % every && i !== n - 1) return;
+      if (i !== n - 1 && n - 1 - i < every) return;
+      var tx = add("text", { x: x(i), y: H - 6, "text-anchor": n === 1 ? "middle" : i === 0 ? "start" : i === n - 1 ? "end" : "middle" });
+      tx.textContent = lb;
+    });
+    // Líneas y puntos
+    var cross = add("line", { y1: pad.t, y2: pad.t + ih, stroke: css("--text-muted"), "stroke-width": 1, "stroke-dasharray": "3 3", opacity: 0 });
+    var hovers = [];
+    series.forEach(function (s) {
+      var color = css(s.color);
+      var d = "", pen = false;
+      s.values.forEach(function (v, i) {
+        if (v == null) { pen = false; return; }
+        d += (pen ? "L" : "M") + x(i).toFixed(1) + " " + y(v).toFixed(1);
+        pen = true;
+      });
+      add("path", { d: d, fill: "none", stroke: color, "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round" });
+      s.values.forEach(function (v, i) {
+        if (v == null) return;
+        add("circle", { cx: x(i), cy: y(v), r: n > 20 ? 2.5 : 4, fill: color, stroke: css("--surface-1"), "stroke-width": 2 });
+      });
+      var dot = add("circle", { r: 5, fill: color, stroke: css("--surface-1"), "stroke-width": 2, opacity: 0 });
+      hovers.push(dot);
+      // Etiqueta directa al final de la línea (solo con varias series)
+      if (series.length > 1) {
+        var last = -1;
+        s.values.forEach(function (v, i) { if (v != null) last = i; });
+        if (last >= 0) s._end = { x: x(last), y: y(s.values[last]) };
+      }
+    });
+    if (series.length > 1) {
+      // Separar etiquetas finales que se superponen
+      var ends = series.filter(function (s) { return s._end; }).sort(function (a, b) { return a._end.y - b._end.y; });
+      var lastY = -Infinity;
+      ends.forEach(function (s) {
+        var yy = Math.max(s._end.y, lastY + 13);
+        lastY = yy;
+        var tx = add("text", { x: pad.l + iw + 8, y: yy + 4 });
+        tx.style.fill = css("--text-secondary");
+        tx.textContent = s.name.length > 10 ? s.name.slice(0, 9) + "…" : s.name;
+      });
+    }
+    el.appendChild(svg);
+
+    var tip = document.createElement("div");
+    tip.className = "tip";
+    el.appendChild(tip);
+    var hit = add("rect", { x: pad.l - 10, y: 0, width: iw + 20, height: H, fill: "transparent" });
+    function show(evt) {
+      var r = svg.getBoundingClientRect();
+      var px = ((evt.clientX - r.left) / r.width) * W;
+      var i = n === 1 ? 0 : Math.round(((px - pad.l) / iw) * (n - 1));
+      i = Math.max(0, Math.min(n - 1, i));
+      var xi = x(i);
+      cross.setAttribute("x1", xi); cross.setAttribute("x2", xi); cross.setAttribute("opacity", 1);
+      var html = "<b>Semana del " + esc(labels[i]) + "</b>";
+      series.forEach(function (s, k) {
+        var v = s.values[i];
+        if (v == null) { hovers[k].setAttribute("opacity", 0); return; }
+        hovers[k].setAttribute("cx", xi); hovers[k].setAttribute("cy", y(v)); hovers[k].setAttribute("opacity", 1);
+        html += '<div class="row"><span class="sw" style="background:' + css(s.color) + '"></span>' +
+          (series.length > 1 ? esc(s.name) + ": " : "") + "<span>" + fmt(v) + " al día</span></div>";
+      });
+      tip.innerHTML = html;
+      tip.classList.add("on");
+      var left = (xi / W) * r.width + 12;
+      if (left + tip.offsetWidth > r.width) left = (xi / W) * r.width - tip.offsetWidth - 12;
+      tip.style.left = Math.max(0, left) + "px";
+      tip.style.top = "4px";
+    }
+    function hide() {
+      tip.classList.remove("on");
+      cross.setAttribute("opacity", 0);
+      hovers.forEach(function (h) { h.setAttribute("opacity", 0); });
+    }
+    hit.addEventListener("pointermove", show);
+    hit.addEventListener("pointerdown", show);
+    hit.addEventListener("pointerleave", function (e) { if (e.pointerType === "mouse") hide(); });
+  }
+
+  // ---------- Vista ----------
+
+  var weeks = [], selected = [], selWeek = -1, appColor = {};
+
+  function render() {
+    var has = weeks.length > 0;
+    document.getElementById("empty").classList.toggle("hidden", has);
+    document.getElementById("content").classList.toggle("hidden", !has);
+    document.getElementById("exportBtn").disabled = !load();
+    if (!has) return;
+
+    var last = weeks[weeks.length - 1], prev = weeks[weeks.length - 2];
+    var recent = weeks.slice(-4);
+    var avg4 = recent.reduce(function (a, w) { return a + w.prom; }, 0) / recent.length;
+    document.getElementById("hero").innerHTML =
+      '<p class="sub" style="margin:0 0 4px">Semana del ' + weekLabel(last) + (last.dias < 7 ? " (en curso, " + last.dias + " días)" : "") + "</p>" +
+      '<div class="hero-num">' + fmt(last.prom) + " <small>al día</small></div>" +
+      '<div class="hero-meta">' + deltaText(last.prom, prev && prev.prom) +
+      (recent.length > 1 ? "<span>Promedio últimas " + recent.length + " semanas: " + fmt(avg4) + "</span>" : "") +
+      "<span>Equivale a " + fmt(last.prom * 7) + " en la semana</span></div>";
+
+    lineChart(document.getElementById("chartTotal"),
+      weeks.map(function (w) { return dayLabel(w.lunes); }),
+      [{ name: "Promedio diario", color: "--series-1", values: weeks.map(function (w) { return w.prom; }) }]);
+
+    renderBars();
+    renderApps();
+
+    document.getElementById("tbody").innerHTML = weeks.slice().reverse().map(function (w) {
+      var top = w.apps[0];
+      return "<tr><td>" + dayLabel(w.lunes) + "</td><td class=\"n\">" + fmt(w.prom) + "</td><td>" +
+        (top ? esc(top.nombre) + " · " + fmt(top.diario) : "–") + "</td></tr>";
+    }).join("");
+  }
+
+  function renderBars() {
+    var sel = document.getElementById("weekSel");
+    if (selWeek < 0 || selWeek >= weeks.length) selWeek = weeks.length - 1;
+    sel.innerHTML = weeks.map(function (w, i) { return '<option value="' + i + '"' + (i === selWeek ? " selected" : "") + ">" + weekLabel(w) + "</option>"; }).reverse().join("");
+    var w = weeks[selWeek], p = weeks[selWeek - 1];
+    var apps = w.apps.slice().sort(function (a, b) { return b.diario - a.diario; }).slice(0, 8);
+    var max = apps.length ? apps[0].diario : 1;
+    var prevMap = {};
+    if (p) p.apps.forEach(function (a) { prevMap[a.nombre.toLowerCase()] = a.diario; });
+    document.getElementById("bars").innerHTML = apps.length ? apps.map(function (a) {
+      var pv = prevMap[a.nombre.toLowerCase()];
+      var d = pv == null ? "" : Math.round(a.diario - pv);
+      var dHtml = d === "" ? (p ? '<i>nueva</i>' : "") : d === 0 ? "<i>=</i>" :
+        '<i class="delta ' + (d < 0 ? "good" : "bad") + '">' + (d < 0 ? "−" : "+") + fmt(Math.abs(d)) + "</i>";
+      return '<li><div class="lbl"><span>' + esc(a.nombre) + '</span><span class="val">' + fmt(a.diario) + dHtml + "</span></div>" +
+        '<div class="track"><div class="fill" style="width:' + Math.max(2, (a.diario / max) * 100).toFixed(1) + '%"></div></div></li>';
+    }).join("") : '<li class="sub">Esta captura no incluía apps.</li>';
+  }
+
+  function renderApps() {
+    // Ranking global de apps (suma de su promedio diario en todas las semanas).
+    // El color se asigna por app y no cambia al filtrar.
+    var totals = {}, display = {};
+    weeks.forEach(function (w) {
+      w.apps.forEach(function (a) {
+        var k = a.nombre.toLowerCase();
+        totals[k] = (totals[k] || 0) + a.diario;
+        display[k] = a.nombre;
+      });
+    });
+    var ranked = Object.keys(totals).sort(function (a, b) { return totals[b] - totals[a]; }).slice(0, 8);
+    selected = selected.filter(function (k) { return ranked.indexOf(k) !== -1; });
+    if (!selected.length) selected = ranked.slice(0, 3);
+    // Color fijo por app: una app conserva su color mientras siga seleccionada
+    Object.keys(appColor).forEach(function (k) { if (selected.indexOf(k) === -1) delete appColor[k]; });
+    selected.forEach(function (k) {
+      if (appColor[k]) return;
+      var taken = selected.map(function (s) { return appColor[s]; });
+      appColor[k] = SERIES.filter(function (c) { return taken.indexOf(c) === -1; })[0];
+    });
+    var chips = document.getElementById("chips");
+    chips.innerHTML = ranked.map(function (k) {
+      var on = selected.indexOf(k) !== -1;
+      return '<button class="chip" data-k="' + esc(k) + '" aria-pressed="' + on + '"><span class="sw" style="background:' +
+        (on ? css(appColor[k]) : "transparent") + '"></span>' + esc(display[k]) + "</button>";
+    }).join("");
+    var el = document.getElementById("chartApps");
+    if (!selected.length) { el.innerHTML = '<p class="sub">Sin apps registradas.</p>'; return; }
+    lineChart(el, weeks.map(function (w) { return dayLabel(w.lunes); }), selected.map(function (k) {
+      return {
+        name: display[k], color: appColor[k],
+        values: weeks.map(function (w) {
+          var a = w.apps.filter(function (x) { return x.nombre.toLowerCase() === k; })[0];
+          return a ? a.diario : null;
+        })
+      };
+    }));
+  }
+
+  document.getElementById("chips").addEventListener("click", function (e) {
+    var b = e.target.closest(".chip");
+    if (!b) return;
+    var k = b.getAttribute("data-k"), i = selected.indexOf(k);
+    if (i !== -1) { if (selected.length > 1) selected.splice(i, 1); }
+    else if (selected.length < MAX_APPS) selected.push(k);
+    else { banner("Puedes comparar hasta " + MAX_APPS + " apps a la vez."); return; }
+    renderApps();
+  });
+  document.getElementById("weekSel").addEventListener("change", function (e) { selWeek = +e.target.value; renderBars(); });
+
+  function banner(msg) {
+    var b = document.getElementById("banner");
+    b.textContent = msg;
+    b.classList.remove("hidden");
+    clearTimeout(banner._t);
+    banner._t = setTimeout(function () { b.classList.add("hidden"); }, 5000);
+  }
+
+  function setRaw(raw, origin) {
+    var w = buildWeeks(raw);
+    if (!w.length) { banner("No encontré semanas válidas en " + origin + "."); return false; }
+    store(raw);
+    weeks = w;
+    selWeek = -1;
+    render();
+    return true;
+  }
+
+  document.getElementById("fileIn").addEventListener("change", function (e) {
+    var f = e.target.files[0];
+    if (!f) return;
+    f.text().then(function (t) { if (setRaw(t, "el archivo")) banner("Respaldo importado: " + weeks.length + " semanas."); });
+    e.target.value = "";
+  });
+  document.getElementById("exportBtn").addEventListener("click", function () {
+    var raw = load();
+    if (!raw) return;
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([raw], { type: "text/plain" }));
+    a.download = "tiempo-pantalla.txt";
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+  });
+  document.getElementById("clearBtn").addEventListener("click", function () {
+    if (!confirm("Esto borra la copia guardada en este navegador. Tu archivo en iCloud no se toca. ¿Continuar?")) return;
+    forget();
+    weeks = [];
+    render();
+  });
+
+  var rt;
+  window.addEventListener("resize", function () { clearTimeout(rt); rt = setTimeout(function () { if (weeks.length) render(); }, 150); });
+
+  // ---------- Inicio ----------
+  // El Atajo abre la página con todo el historial en el fragmento (#d=...).
+  // El fragmento nunca se envía al servidor.
+  var hash = location.hash.slice(1);
+  var fromLink = false;
+  if (hash.indexOf("d=") === 0) {
+    try {
+      fromLink = setRaw(decodeB64(decodeURIComponent(hash.slice(2))), "el enlace del Atajo");
+    } catch (e) { banner("No pude leer los datos que envió el Atajo."); }
+    history.replaceState(null, "", location.pathname + location.search);
+  }
+  if (!fromLink) {
+    var cached = load();
+    weeks = cached ? buildWeeks(cached) : [];
+    render();
+  }
+})();
+</script>
+</body>
+</html>
