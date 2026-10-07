@@ -24,6 +24,7 @@
   --good: #1f7a3a;
   --bad: #b8322f;
   --chip-bg: #efeee9;
+  --otros: #a3a29c;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -42,6 +43,7 @@
     --good: #5cc27a;
     --bad: #ee7a77;
     --chip-bg: #262624;
+    --otros: #6b6a65;
   }
 }
 :root[data-theme="dark"] {
@@ -60,6 +62,7 @@
   --good: #5cc27a;
   --bad: #ee7a77;
   --chip-bg: #262624;
+  --otros: #6b6a65;
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; }
@@ -105,6 +108,9 @@ select {
 .bars .val i { font-style: normal; font-size: 12px; margin-left: 6px; }
 .track { height: 8px; margin-top: 5px; border-radius: 4px; background: var(--grid); overflow: hidden; }
 .fill { height: 100%; border-radius: 4px; background: var(--series-1); }
+.fill.otros { background: var(--otros); }
+.muted { color: var(--text-muted); font-size: 12px; }
+.chip.excl[aria-pressed="true"] { background: var(--chip-bg); color: var(--bad); border-color: transparent; text-decoration: line-through; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
 .chip {
   font: inherit; font-size: 13px; border: 1px solid var(--border); background: transparent; color: var(--text-secondary);
@@ -143,7 +149,7 @@ textarea {
 
   <section id="paste" class="card hidden">
     <h2>Cargar datos del Atajo</h2>
-    <p class="sub">El Atajo copió tu historial. Toca el botón y luego "Pegar".</p>
+    <p class="sub">El Atajo "Restaurar" copió tu historial. Toca el botón y luego "Pegar".</p>
     <button class="btn primary" id="pasteBtn">Cargar mis datos</button>
     <div id="pasteManual" class="hidden">
       <p class="sub" style="margin-top:12px">Si el botón no funciona, mantén presionado el recuadro, elige "Pegar" y toca Cargar.</p>
@@ -158,7 +164,7 @@ textarea {
     <ol>
       <li>Toma una captura de la vista semanal de Tiempo en pantalla.</li>
       <li>Ejecuta el Atajo <b>Registrar tiempo en pantalla</b>.</li>
-      <li>Al terminar, el Atajo abre esta página y cargas tu historial con un toque.</li>
+      <li>Al terminar, el Atajo abre esta página con la semana nueva. Si falta historial, usa el Atajo <b>Restaurar</b>.</li>
     </ol>
     <p>Si ya tienes un respaldo, impórtalo abajo.</p>
   </section>
@@ -168,7 +174,7 @@ textarea {
 
     <section class="card">
       <h2>Promedio diario por semana</h2>
-      <p class="sub">Toca el gráfico para ver cada semana</p>
+      <p class="sub" id="totalSub">Toca el gráfico para ver cada semana</p>
       <div class="chart" id="chartTotal"></div>
     </section>
 
@@ -177,7 +183,7 @@ textarea {
         <h2>Apps más usadas</h2>
         <select id="weekSel" aria-label="Semana"></select>
       </div>
-      <p class="sub">Promedio diario de la semana y cambio vs. la anterior</p>
+      <p class="sub">Promedio diario de la semana y cambio vs. la anterior. "Otros" es la diferencia entre el total y las apps de la lista.</p>
       <ul class="bars" id="bars"></ul>
     </section>
 
@@ -186,6 +192,12 @@ textarea {
       <p class="sub">Promedio diario, elige hasta 4 apps</p>
       <div class="chips" id="chips"></div>
       <div class="chart" id="chartApps"></div>
+    </section>
+
+    <section class="card">
+      <h2>Excluir apps</h2>
+      <p class="sub">Toca una app para no contarla en el total (por ejemplo, Google Maps usado como GPS). Solo se descuenta en las semanas en que la app aparece en la captura.</p>
+      <div class="chips" id="exclChips" style="margin:0"></div>
     </section>
 
     <section class="card">
@@ -469,60 +481,27 @@ textarea {
   // ---------- Vista ----------
 
   var weeks = [], selected = [], selWeek = -1, appColor = {};
+  var OTROS = "__otros__";
 
-  function render() {
-    var has = weeks.length > 0;
-    document.getElementById("empty").classList.toggle("hidden", has || !document.getElementById("paste").classList.contains("hidden"));
-    document.getElementById("content").classList.toggle("hidden", !has);
-    document.getElementById("exportBtn").disabled = !load();
-    if (!has) return;
+  // ---------- Apps excluidas (se recuerdan en este navegador) ----------
+  var EX_KEY = "tp-excluir-v1";
+  var excluded = {};
+  try { (JSON.parse(localStorage.getItem(EX_KEY)) || []).forEach(function (k) { excluded[k] = true; }); } catch (e) {}
+  function saveExcluded() { try { localStorage.setItem(EX_KEY, JSON.stringify(Object.keys(excluded))); } catch (e) {} }
 
-    var last = weeks[weeks.length - 1], prev = weeks[weeks.length - 2];
-    var recent = weeks.slice(-4);
-    var avg4 = recent.reduce(function (a, w) { return a + w.prom; }, 0) / recent.length;
-    document.getElementById("hero").innerHTML =
-      '<p class="sub" style="margin:0 0 4px">Semana del ' + weekLabel(last) + (last.dias < 7 ? " (en curso, " + last.dias + " días)" : "") + "</p>" +
-      '<div class="hero-num">' + fmt(last.prom) + " <small>al día</small></div>" +
-      '<div class="hero-meta">' + deltaText(last.prom, prev && prev.prom) +
-      (recent.length > 1 ? "<span>Promedio últimas " + recent.length + " semanas: " + fmt(avg4) + "</span>" : "") +
-      "<span>Equivale a " + fmt(last.prom * 7) + " en la semana</span></div>";
-
-    lineChart(document.getElementById("chartTotal"),
-      weeks.map(function (w) { return dayLabel(w.lunes); }),
-      [{ name: "Promedio diario", color: "--series-1", values: weeks.map(function (w) { return w.prom; }) }]);
-
-    renderBars();
-    renderApps();
-
-    document.getElementById("tbody").innerHTML = weeks.slice().reverse().map(function (w) {
-      var top = w.apps[0];
-      return "<tr><td>" + dayLabel(w.lunes) + "</td><td class=\"n\">" + fmt(w.prom) + "</td><td>" +
-        (top ? esc(top.nombre) + " · " + fmt(top.diario) : "–") + "</td></tr>";
-    }).join("");
+  // Vista de una semana sin las apps excluidas. "Otros" = promedio total menos las
+  // apps visibles en la captura (incluye las apps que no salen en la lista).
+  function adj(w) {
+    var ex = 0, apps = [], listed = 0;
+    w.apps.forEach(function (a) {
+      if (excluded[a.nombre.toLowerCase()]) ex += a.diario;
+      else { apps.push(a); listed += a.diario; }
+    });
+    var prom = Math.max(0, w.prom - ex);
+    return { prom: prom, apps: apps, otros: Math.max(0, prom - listed), ex: ex };
   }
 
-  function renderBars() {
-    var sel = document.getElementById("weekSel");
-    if (selWeek < 0 || selWeek >= weeks.length) selWeek = weeks.length - 1;
-    sel.innerHTML = weeks.map(function (w, i) { return '<option value="' + i + '"' + (i === selWeek ? " selected" : "") + ">" + weekLabel(w) + "</option>"; }).reverse().join("");
-    var w = weeks[selWeek], p = weeks[selWeek - 1];
-    var apps = w.apps.slice().sort(function (a, b) { return b.diario - a.diario; }).slice(0, 8);
-    var max = apps.length ? apps[0].diario : 1;
-    var prevMap = {};
-    if (p) p.apps.forEach(function (a) { prevMap[a.nombre.toLowerCase()] = a.diario; });
-    document.getElementById("bars").innerHTML = apps.length ? apps.map(function (a) {
-      var pv = prevMap[a.nombre.toLowerCase()];
-      var d = pv == null ? "" : Math.round(a.diario - pv);
-      var dHtml = d === "" ? (p ? '<i>nueva</i>' : "") : d === 0 ? "<i>=</i>" :
-        '<i class="delta ' + (d < 0 ? "good" : "bad") + '">' + (d < 0 ? "−" : "+") + fmt(Math.abs(d)) + "</i>";
-      return '<li><div class="lbl"><span>' + esc(a.nombre) + '</span><span class="val">' + fmt(a.diario) + dHtml + "</span></div>" +
-        '<div class="track"><div class="fill" style="width:' + Math.max(2, (a.diario / max) * 100).toFixed(1) + '%"></div></div></li>';
-    }).join("") : '<li class="sub">Esta captura no incluía apps.</li>';
-  }
-
-  function renderApps() {
-    // Ranking global de apps (suma de su promedio diario en todas las semanas).
-    // El color se asigna por app y no cambia al filtrar.
+  function allApps() {
     var totals = {}, display = {};
     weeks.forEach(function (w) {
       w.apps.forEach(function (a) {
@@ -531,13 +510,91 @@ textarea {
         display[k] = a.nombre;
       });
     });
-    var ranked = Object.keys(totals).sort(function (a, b) { return totals[b] - totals[a]; }).slice(0, 8);
+    return { keys: Object.keys(totals).sort(function (a, b) { return totals[b] - totals[a]; }), display: display };
+  }
+
+  function render() {
+    var has = weeks.length > 0;
+    document.getElementById("empty").classList.toggle("hidden", has || !document.getElementById("paste").classList.contains("hidden"));
+    document.getElementById("content").classList.toggle("hidden", !has);
+    document.getElementById("exportBtn").disabled = !load();
+    if (!has) return;
+
+    var A = weeks.map(adj);
+    var last = weeks[weeks.length - 1], la = A[A.length - 1], pa = A[A.length - 2];
+    var recent = A.slice(-4);
+    var avg4 = recent.reduce(function (a, w) { return a + w.prom; }, 0) / recent.length;
+    var exNames = allApps();
+    var exList = exNames.keys.filter(function (k) { return excluded[k]; }).map(function (k) { return exNames.display[k]; });
+    document.getElementById("hero").innerHTML =
+      '<p class="sub" style="margin:0 0 4px">Semana del ' + weekLabel(last) + (last.dias < 7 ? " (en curso, " + last.dias + " días)" : "") + "</p>" +
+      '<div class="hero-num">' + fmt(la.prom) + " <small>al día</small></div>" +
+      '<div class="hero-meta">' + deltaText(la.prom, pa && pa.prom) +
+      (recent.length > 1 ? "<span>Promedio últimas " + recent.length + " semanas: " + fmt(avg4) + "</span>" : "") +
+      "<span>Equivale a " + fmt(la.prom * 7) + " en la semana</span>" +
+      (exList.length ? "<span>Sin contar " + esc(exList.join(", ")) + (la.ex ? " (" + fmt(la.ex) + " al día)" : "") + "</span>" : "") +
+      "</div>";
+
+    document.getElementById("totalSub").textContent = exList.length
+      ? "Sin contar las apps excluidas. Toca el gráfico para ver cada semana."
+      : "Toca el gráfico para ver cada semana";
+    lineChart(document.getElementById("chartTotal"),
+      weeks.map(function (w) { return dayLabel(w.lunes); }),
+      [{ name: "Promedio diario", color: "--series-1", values: A.map(function (w) { return w.prom; }) }]);
+
+    renderBars();
+    renderApps();
+    renderExcl();
+
+    document.getElementById("tbody").innerHTML = weeks.map(function (w, i) {
+      var top = A[i].apps.slice().sort(function (a, b) { return b.diario - a.diario; })[0];
+      return "<tr><td>" + dayLabel(w.lunes) + "</td><td class=\"n\">" + fmt(A[i].prom) + "</td><td>" +
+        (top ? esc(top.nombre) + " · " + fmt(top.diario) : "–") + "</td></tr>";
+    }).reverse().join("");
+  }
+
+  function deltaChip(cur, prev, hasPrevWeek) {
+    if (prev == null) return hasPrevWeek ? "<i>nueva</i>" : "";
+    var d = Math.round(cur - prev);
+    if (d === 0) return "<i>=</i>";
+    return '<i class="delta ' + (d < 0 ? "good" : "bad") + '">' + (d < 0 ? "−" : "+") + fmt(Math.abs(d)) + "</i>";
+  }
+
+  function renderBars() {
+    var sel = document.getElementById("weekSel");
+    if (selWeek < 0 || selWeek >= weeks.length) selWeek = weeks.length - 1;
+    sel.innerHTML = weeks.map(function (w, i) { return '<option value="' + i + '"' + (i === selWeek ? " selected" : "") + ">" + weekLabel(w) + "</option>"; }).reverse().join("");
+    var w = adj(weeks[selWeek]), p = selWeek > 0 ? adj(weeks[selWeek - 1]) : null;
+    var apps = w.apps.slice().sort(function (a, b) { return b.diario - a.diario; });
+    var rows = apps.map(function (a) { return { nombre: a.nombre, diario: a.diario, k: a.nombre.toLowerCase() }; });
+    if (w.otros >= 0.5) rows.push({ nombre: "Otros", diario: w.otros, k: OTROS });
+    var max = Math.max.apply(null, rows.map(function (r) { return r.diario; }).concat([1]));
+    var prevMap = {};
+    if (p) {
+      p.apps.forEach(function (a) { prevMap[a.nombre.toLowerCase()] = a.diario; });
+      prevMap[OTROS] = p.otros;
+    }
+    document.getElementById("bars").innerHTML = rows.length ? rows.map(function (r) {
+      var otros = r.k === OTROS;
+      return '<li><div class="lbl"><span>' + esc(r.nombre) + (otros ? ' <span class="muted">(apps fuera de la lista)</span>' : "") +
+        '</span><span class="val">' + fmt(r.diario) + deltaChip(r.diario, prevMap[r.k], !!p) + "</span></div>" +
+        '<div class="track"><div class="fill' + (otros ? " otros" : "") + '" style="width:' + Math.max(2, (r.diario / max) * 100).toFixed(1) + '%"></div></div></li>';
+    }).join("") : '<li class="sub">Esta captura no incluía apps.</li>';
+  }
+
+  function renderApps() {
+    // Ranking global de apps (suma de su promedio diario en todas las semanas).
+    // El color se asigna por app y no cambia al filtrar.
+    var all = allApps(), display = all.display;
+    display[OTROS] = "Otros";
+    var ranked = all.keys.filter(function (k) { return !excluded[k]; }).slice(0, 8).concat([OTROS]);
     selected = selected.filter(function (k) { return ranked.indexOf(k) !== -1; });
-    if (!selected.length) selected = ranked.slice(0, 3);
-    // Color fijo por app: una app conserva su color mientras siga seleccionada
+    if (!selected.length) selected = ranked.filter(function (k) { return k !== OTROS; }).slice(0, 3);
+    // Color fijo por app: una app conserva su color mientras siga seleccionada. "Otros" va en gris.
     Object.keys(appColor).forEach(function (k) { if (selected.indexOf(k) === -1) delete appColor[k]; });
     selected.forEach(function (k) {
       if (appColor[k]) return;
+      if (k === OTROS) { appColor[k] = "--otros"; return; }
       var taken = selected.map(function (s) { return appColor[s]; });
       appColor[k] = SERIES.filter(function (c) { return taken.indexOf(c) === -1; })[0];
     });
@@ -549,16 +606,35 @@ textarea {
     }).join("");
     var el = document.getElementById("chartApps");
     if (!selected.length) { el.innerHTML = '<p class="sub">Sin apps registradas.</p>'; return; }
+    var A = weeks.map(adj);
     lineChart(el, weeks.map(function (w) { return dayLabel(w.lunes); }), selected.map(function (k) {
       return {
         name: display[k], color: appColor[k],
-        values: weeks.map(function (w) {
+        values: A.map(function (w) {
+          if (k === OTROS) return w.otros;
           var a = w.apps.filter(function (x) { return x.nombre.toLowerCase() === k; })[0];
           return a ? a.diario : null;
         })
       };
     }));
   }
+
+  function renderExcl() {
+    var all = allApps();
+    document.getElementById("exclChips").innerHTML = all.keys.map(function (k) {
+      return '<button class="chip excl" data-k="' + esc(k) + '" aria-pressed="' + !!excluded[k] + '">' +
+        (excluded[k] ? "✕ " : "") + esc(all.display[k]) + "</button>";
+    }).join("");
+  }
+
+  document.getElementById("exclChips").addEventListener("click", function (e) {
+    var b = e.target.closest(".chip");
+    if (!b) return;
+    var k = b.getAttribute("data-k");
+    if (excluded[k]) delete excluded[k]; else excluded[k] = true;
+    saveExcluded();
+    render();
+  });
 
   document.getElementById("chips").addEventListener("click", function (e) {
     var b = e.target.closest(".chip");
@@ -615,9 +691,10 @@ textarea {
   window.addEventListener("resize", function () { clearTimeout(rt); rt = setTimeout(function () { if (weeks.length) render(); }, 150); });
 
   // ---------- Inicio ----------
-  // Forma principal: el Atajo copia el historial al portapapeles y abre #pegar.
-  // (Enviarlo en la URL falla cuando el historial crece: iOS corta URLs largas.)
-  // Se mantiene #d=... por compatibilidad. Ninguna de las dos envía datos al servidor.
+  // iPhone: "Registrar" abre #add=<semana nueva> y la página la suma a lo guardado.
+  // "Restaurar" copia todo el historial al portapapeles y abre #pegar (respaldo).
+  // No se envía todo el historial en la URL porque iOS corta las URLs largas.
+  // Nada de esto llega al servidor: el fragmento (#...) queda en el navegador.
   var pasteCard = document.getElementById("paste");
   function loadedFromPaste(raw) {
     if (!setRaw(raw, "lo copiado")) return;
@@ -639,8 +716,24 @@ textarea {
 
   var hash = location.hash.slice(1);
   var fromLink = false;
-  if (hash === "pegar") {
+  // En el Mac, ver_en_mac.py incrusta el archivo de iCloud en window.TP_DATA (Base64)
+  if (window.TP_DATA) {
+    fromLink = setRaw(decodeB64(window.TP_DATA), "el archivo de iCloud");
+  } else if (hash === "pegar") {
     pasteCard.classList.remove("hidden");
+    history.replaceState(null, "", location.pathname + location.search);
+  } else if (hash.indexOf("add=") === 0) {
+    // El Atajo "Registrar" envía solo la semana nueva; se suma a lo guardado aquí
+    try {
+      var nueva = decodeB64(decodeURIComponent(hash.slice(4))).trim();
+      var semanas = buildWeeks(nueva);
+      if (!semanas.length) throw new Error("vacío");
+      var previo = load();
+      var raw = previo.indexOf(nueva) !== -1 ? previo : (previo ? previo.replace(/\s*$/, "\n") : "") + nueva + "\n";
+      fromLink = setRaw(raw, "el enlace del Atajo");
+      if (fromLink) banner("Semana del " + weekLabel(semanas[0]) + " agregada." +
+        (weeks.length === 1 ? " Si falta tu historial, ejecuta el Atajo Restaurar una vez." : ""));
+    } catch (e) { banner("No pude leer la semana que envió el Atajo."); }
     history.replaceState(null, "", location.pathname + location.search);
   } else if (hash.indexOf("d=") === 0) {
     try {
