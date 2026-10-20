@@ -278,10 +278,66 @@ textarea {
     return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
   }
 
-  function datosDe(r) {
+  // Lee el texto de la captura (OCR) con reglas fijas. Es más confiable que el
+  // modelo del iPhone: el OCR a veces pone el total junto a la primera app y el
+  // modelo se lo asignaba a esa app. Devuelve null si las cifras no cuadran.
+  var DUR_LINE = /^[•·*\-\s]*(?:\d+\s*h(?:\s*\d+\s*m\w*)?|\d+\s*m\w*)\s*$/i;
+  var SKIP = /^(view options|ver opciones|show more|mostrar más|mostrar mas|show less|mostrar menos|updated|actualizado)/i;
+  function leerTexto(texto) {
+    if (typeof texto !== "string") return null;
+    var L = texto.split(/\n/).map(function (s) { return s.trim(); }).filter(Boolean);
+    var isDur = function (s) { return DUR_LINE.test(s); };
+    var iAvg = -1, prom = null;
+    for (var i = 0; i < L.length && prom == null; i++) {
+      if (/average|promedio/i.test(L[i])) {
+        for (var j = i + 1; j < Math.min(L.length, i + 3); j++) if (isDur(L[j])) { prom = parseDur(L[j]); iAvg = j; break; }
+      }
+    }
+    if (prom == null) return null;
+    var iMost = -1;
+    for (i = 0; i < L.length; i++) if (/^(most used|más usad|mas usad)/i.test(L[i])) { iMost = i; break; }
+    if (iMost < 0) return null;
+    // Total: el tiempo que calza con promedio × 7 (el promedio que muestra iOS viene truncado al minuto)
+    var iTot = -1, total = null, best = Infinity;
+    for (i = 0; i < L.length; i++) {
+      if (i === iAvg || !isDur(L[i])) continue;
+      var v = parseDur(L[i]), diff = v - prom * 7;
+      if (diff >= -4 && diff <= 11 && Math.abs(diff) < best) { best = Math.abs(diff); iTot = i; total = v; }
+    }
+    var apps = [], nombre = null;
+    for (i = iMost + 1; i < L.length; i++) {
+      var s = L[i];
+      if (i === iTot || SKIP.test(s)) continue;
+      if (isDur(s)) {
+        if (nombre) { apps.push({ nombre: nombre, tiempo: parseDur(s) }); nombre = null; }
+      } else if (/[a-záéíóúñ]/i.test(s)) {
+        nombre = s.replace(/^[•·\s]+/, "");
+      }
+    }
+    if (!apps.length) return null;
+    var suma = apps.reduce(function (a, x) { return a + x.tiempo; }, 0);
+    var tope = total != null ? total : prom * 7 + 7;
+    if (apps.some(function (x) { return x.tiempo > tope; }) || suma > tope + 5) return null;
+    return { promedio_diario: prom, total: total, apps: apps };
+  }
+
+  // Revisa lo que entregó el modelo: si una app supera el total de la semana, la lista no es confiable
+  function datosModelo(r) {
     var d = r.datos;
     if (typeof d === "string") { var o = parseObjects(d); d = o[0]; }
-    return d && typeof d === "object" ? d : null;
+    if (!d || typeof d !== "object") return null;
+    var prom = parseDur(d.promedio_diario);
+    if (prom != null && Array.isArray(d.apps)) {
+      var tope = prom * 7 + 7;
+      if (d.apps.some(function (a) { var m = parseDur(a && a.tiempo); return m != null && m > tope; })) {
+        d = { promedio_diario: d.promedio_diario, total: "", apps: [], dudoso: true };
+      }
+    }
+    return d;
+  }
+
+  function datosDe(r) {
+    return leerTexto(r.texto) || datosModelo(r);
   }
 
   function buildWeeks(raw) {
