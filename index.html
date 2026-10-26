@@ -774,37 +774,54 @@ textarea {
     loadedFromPaste(document.getElementById("pasteArea").value);
   });
 
-  var hash = location.hash.slice(1);
-  var fromLink = false;
-  // En el Mac, ver_en_mac.py incrusta el archivo de iCloud en window.TP_DATA (Base64)
-  if (window.TP_DATA) {
-    fromLink = setRaw(decodeB64(window.TP_DATA), "el archivo de iCloud");
-  } else if (hash === "pegar") {
-    pasteCard.classList.remove("hidden");
-    history.replaceState(null, "", location.pathname + location.search);
-  } else if (hash.indexOf("add=") === 0) {
-    // El Atajo "Registrar" envía solo la semana nueva; se suma a lo guardado aquí
-    try {
-      var nueva = decodeB64(decodeURIComponent(hash.slice(4))).trim();
-      var semanas = buildWeeks(nueva);
-      if (!semanas.length) throw new Error("vacío");
-      var previo = load();
-      var raw = previo.indexOf(nueva) !== -1 ? previo : (previo ? previo.replace(/\s*$/, "\n") : "") + nueva + "\n";
-      fromLink = setRaw(raw, "el enlace del Atajo");
-      if (fromLink) banner("Semana del " + weekLabel(semanas[0]) + " agregada." +
-        (weeks.length === 1 ? " Si falta tu historial, ejecuta el Atajo Restaurar una vez." : ""));
-    } catch (e) { banner("No pude leer la semana que envió el Atajo."); }
-    history.replaceState(null, "", location.pathname + location.search);
-  } else if (hash.indexOf("d=") === 0) {
-    try {
-      fromLink = setRaw(decodeB64(decodeURIComponent(hash.slice(2))), "el enlace del Atajo");
-    } catch (e) { banner("No pude leer los datos que envió el Atajo."); }
-    history.replaceState(null, "", location.pathname + location.search);
+  // Procesa lo que trae el "#" de la URL. Se llama al cargar y también en
+  // "hashchange": si la página ya estaba abierta en una pestaña de Safari, el
+  // Atajo solo cambia el "#" y el navegador no recarga la página.
+  function procesarHash() {
+    var hash = location.hash.slice(1);
+    var fromLink = false;
+    if (hash === "pegar") {
+      pasteCard.classList.remove("hidden");
+    } else if (hash.indexOf("add=") === 0) {
+      // El Atajo "Registrar" envía solo la semana nueva; se suma a lo guardado aquí
+      try {
+        var nueva = decodeB64(decodeURIComponent(hash.slice(4))).trim();
+        var semanas = buildWeeks(nueva);
+        if (!semanas.length) throw new Error("vacío");
+        var previo = load();
+        var raw = previo.indexOf(nueva) !== -1 ? previo : (previo ? previo.replace(/\s*$/, "\n") : "") + nueva + "\n";
+        fromLink = setRaw(raw, "el enlace del Atajo");
+        if (fromLink) banner("Semana del " + weekLabel(semanas[0]) + " agregada." +
+          (weeks.length === 1 ? " Si falta tu historial, ejecuta el Atajo Restaurar una vez." : ""));
+      } catch (e) { banner("No pude leer la semana que envió el Atajo."); }
+    } else if (hash.indexOf("d=") === 0) {
+      try {
+        fromLink = setRaw(decodeB64(decodeURIComponent(hash.slice(2))), "el enlace del Atajo");
+      } catch (e) { banner("No pude leer los datos que envió el Atajo."); }
+    }
+    if (hash) history.replaceState(null, "", location.pathname + location.search);
+    return fromLink;
   }
-  if (!fromLink) {
+
+  // Vuelve a leer lo guardado (por si otra pestaña lo cambió) y redibuja
+  function desdeGuardado() {
     var cached = load();
     weeks = cached ? buildWeeks(cached) : [];
     render();
+  }
+
+  // En el Mac, ver_en_mac.py incrusta el archivo de iCloud en window.TP_DATA (Base64)
+  if (window.TP_DATA) {
+    if (!setRaw(decodeB64(window.TP_DATA), "el archivo de iCloud")) desdeGuardado();
+  } else {
+    if (!procesarHash()) desdeGuardado();
+    window.addEventListener("hashchange", function () { if (!procesarHash()) desdeGuardado(); });
+    // Safari puede devolver la página desde su caché de navegación (atrás/adelante o
+    // al volver a la pestaña); en ese caso se relee lo guardado.
+    window.addEventListener("pageshow", function (e) { if (e.persisted && !procesarHash()) desdeGuardado(); });
+    document.addEventListener("visibilitychange", function () {
+      if (document.visibilityState === "visible" && !location.hash) desdeGuardado();
+    });
   }
 })();
 </script>
