@@ -151,6 +151,12 @@ textarea {
   <h1>Mi tiempo en pantalla</h1>
   <div id="banner" class="banner hidden"></div>
 
+  <section id="standalone" class="card hidden">
+    <h2>Estás en la app de inicio</h2>
+    <p class="sub">Esta app guarda sus datos aparte de Safari, y el Atajo "Registrar" siempre abre Safari, así que aquí no llegan las semanas nuevas. Para verlas al día, abre la webapp con el Atajo "Ver" o desde Safari, o actualiza aquí con tu archivo de iCloud (Shortcuts → tiempo-pantalla.txt).</p>
+    <label class="btn primary" style="display:block;text-align:center">Actualizar desde iCloud<input type="file" id="fileIn2" accept=".txt,.json,.jsonl,text/plain,application/json" hidden></label>
+  </section>
+
   <section id="paste" class="card hidden">
     <h2>Cargar datos del Atajo</h2>
     <p class="sub">El Atajo "Restaurar" copió tu historial. Toca el botón y luego "Pegar".</p>
@@ -217,7 +223,7 @@ textarea {
     <h2>Datos</h2>
     <p class="sub" id="dataInfo">Tus datos viven en tu iCloud (tiempo-pantalla.txt). Esta página no los envía a ningún servidor.</p>
     <div class="tools">
-      <label class="btn">Importar respaldo<input type="file" id="fileIn" accept=".txt,.json,.jsonl,text/plain,application/json" hidden></label>
+      <label class="btn">Cargar archivo de iCloud<input type="file" id="fileIn" accept=".txt,.json,.jsonl,text/plain,application/json" hidden></label>
       <button class="btn" id="exportBtn">Descargar copia</button>
       <button class="btn danger" id="clearBtn">Olvidar en este navegador</button>
     </div>
@@ -725,12 +731,19 @@ textarea {
     return true;
   }
 
-  document.getElementById("fileIn").addEventListener("change", function (e) {
+  // Importar reemplaza lo guardado; no hace falta "Olvidar" antes
+  function importar(e) {
     var f = e.target.files[0];
     if (!f) return;
-    f.text().then(function (t) { if (setRaw(t, "el archivo")) banner("Respaldo importado: " + weeks.length + " semanas."); });
+    f.text().then(function (t) { if (setRaw(t, "el archivo")) banner("Datos actualizados: " + weeks.length + " semanas."); });
     e.target.value = "";
-  });
+  }
+  document.getElementById("fileIn").addEventListener("change", importar);
+  document.getElementById("fileIn2").addEventListener("change", importar);
+  // Abierta desde un ícono de la pantalla de inicio ("app web"): su almacenamiento es distinto al de Safari
+  var esAppInicio = window.navigator.standalone === true ||
+    (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
+  if (esAppInicio && !window.TP_DATA) document.getElementById("standalone").classList.remove("hidden");
   document.getElementById("exportBtn").addEventListener("click", function () {
     var raw = load();
     if (!raw) return;
